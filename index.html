@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta charset="utf-8" />
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <style>
+    body {
+      margin: 0;
+      position: fixed;
+      top: 0;
+      right: 0;
+      bottom: 0;
+      left: 0;
+    }
+  </style>
+</head>
+<body>
+  <script>
+    var width = 700,
+      height = 580;
+
+    var svg = d3.select("body")
+      .append("svg")
+      .attr("width", width)
+      .attr("height", height);
+
+    var matriceElt = svg.append("g")
+      .attr("transform", "translate(50,50)")
+      .attr("id", "adjacencyMatrix");
+
+    var nodes;
+    var edges;
+    var matrix;
+    var color = d3.scaleQuantize().range(["#edf8e9", "#bae4b3", "#74c476", "#31a354", "#006d2c"]);
+
+    Promise.all([
+      d3.csv("noeuds.csv"),
+      d3.csv("liens.csv")
+    ]).then(function (files) {
+      nodes = files[0];
+      edges = files[1];
+
+      matrix = createAdjacencyMatrix(nodes, edges);
+      maxSharedFollowers = d3.max(matrix, (d) => d.sharedfollowers);
+
+      color.domain([0, maxSharedFollowers]);
+
+      var squareSize = 25;
+
+      matriceElt.selectAll("rect")
+        .data(matrix)
+        .enter().append("rect")
+        .attr("x", function (d) { return d.x * squareSize; })
+        .attr("y", function (d) { return d.y * squareSize; })
+        .attr("width", squareSize)
+        .attr("height", squareSize)
+        .style("fill", function (d) {
+          var value = matrix.find((m) => m.x === d.x && m.y === d.y).sharedfollowers;
+          return value ? color(value) : "#ccc";
+        })
+        .on("mouseover", function (e, d) {
+          var mousePosition = [e.x, e.y];
+          var rowIndex = Math.floor(mousePosition[1] / squareSize);
+          var colIndex = Math.floor(mousePosition[0] / squareSize);
+
+          matriceElt.selectAll(".highlight-rectangle").remove();
+
+          matriceElt.append("rect")
+            .attr("class", "highlight-rectangle")
+            .attr("x", 0)
+            .attr("y", rowIndex * squareSize - 50)
+            .attr("width", nodes.length * squareSize)
+            .attr("height", squareSize)
+            .style("fill", "none")
+            .style("stroke", "black")
+            .style("stroke-width", "2");
+
+          matriceElt.append("rect")
+            .attr("class", "highlight-rectangle")
+            .attr("x", colIndex * squareSize - 50)
+            .attr("y", 0)
+            .attr("width", squareSize)
+            .attr("height", nodes.length * squareSize)
+            .style("fill", "none")
+            .style("stroke", "black")
+            .style("stroke-width", "2");
+        })
+        .on("mouseout", function () {
+          matriceElt.selectAll(".highlight-rectangle").remove();
+        });
+
+      var scaleSize = nodes.length * 25;
+
+      var x = d3.scaleBand()
+        .domain(nodes.map(function (el) { return el.id; }))
+        .range([0, scaleSize]);
+
+      var y = d3.scaleBand()
+        .domain(nodes.map(function (el) { return el.id; }).reverse())
+        .range([scaleSize, 0]);
+
+      matriceElt.append("g")
+        .attr("transform", "translate(0," + scaleSize + ")")
+        .call(d3.axisBottom(x))
+        .selectAll("text")
+        .attr("transform", "translate(15,15) rotate(45)");
+
+      matriceElt.append("g")
+        .call(d3.axisLeft(y));
+    });
+
+    function createAdjacencyMatrix(nodes, edges) {
+      var edgeHash = {};
+      edges.forEach(function (edge) {
+        var id = edge.source + "-" + edge.target;
+        edgeHash[id] = edge;
+      });
+
+      var matrix = [];
+      nodes.forEach(function (node_a, a) {
+        nodes.forEach(function (node_b, b) {
+          var grid = {
+            id: node_a.id + "-" + node_b.id,
+            x: a,
+            y: b,
+            sharedfollowers: 0
+          };
+          var edge = edgeHash[grid.id];
+          if (edge) {
+            grid.sharedfollowers = parseInt(edge.sharedfollowers);
+          }
+          matrix.push(grid);
+        });
+      });
+      return matrix;
+    }
+  </script>
+</body>
+</html>
